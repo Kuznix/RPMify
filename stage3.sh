@@ -2,33 +2,33 @@
 
 echo -e "\e[1m\e[46m\e[97mSTAGE 3 ACTIVATED\e[0m"
 
-if [ -f /archify-config/wheel_users ]; then
+if [ -f /debianify-config/wheel_users ]; then
   while IFS="" read -r p || [ -n "$p" ]
   do
-    echo -e "\e[1m\e[46m\e[97mADD USER $p TO GROUP wheel\e[0m"
-    usermod -a -G wheel "$p"
-  done < /archify-config/wheel_users
+    echo -e "\e[1m\e[46m\e[97mADD USER $p TO GROUP sudo\e[0m"
+    usermod -a -G sudo "$p"
+  done < /debianify-config/wheel_users
 
-  echo "%wheel ALL=(ALL:ALL) ALL" > /etc/sudoers.d/00_wheel
+  echo "%sudo ALL=(ALL:ALL) ALL" > /etc/sudoers.d/00_sudo
 fi
 
-if [ -f /archify-config/passwd_delta ]; then
+if [ -f /debianify-config/passwd_delta ]; then
   while IFS="" read -r p || [ -n "$p" ]
   do
     IFS=':' read -r -a arr <<< "$p"
     echo -e "\e[1m\e[46m\e[97mCHOWN HOME DIRECTORY ${arr[5]} FOR USER ${arr[0]}\e[0m"
     chown -R "${arr[0]}:${arr[0]}" "${arr[5]}" 
-  done < /archify-config/passwd_delta
+  done < /debianify-config/passwd_delta
 fi
 
-source /archify-config/config
+source /debianify-config/config
 
 echo -e "\e[1m\e[46m\e[97mPERFORMING BASIC CONFIGURATION\e[0m"
 ln -sf "/usr/share/zoneinfo/$LOCALTIME" /etc/localtime
-hwclock --systohc
+timedatectl set-timezone $LOCALTIME
 echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen
-echo "LANG=en_US.UTF-8" > /etc/locale.conf
 locale-gen
+echo "LANG=en_US.UTF-8" > /etc/default/locale
 echo "$NEWHOSTNAME" > /etc/hostname
 
 if [[ -n "$NEW_NONSPACE_PASSWORD" ]]; then
@@ -41,49 +41,41 @@ fi
 
 rm -rf /boot/*
 
-# install DRACUT and pacman hooks for it
+# install DRACUT and tools for it
 if [ "$DRACUT" -eq 1  ]; then
   echo -e "\e[1m\e[40m\e[93mINSTALLING DRACUT AND LVM2\e[0m"
-  pacman --noconfirm -S lvm2 mdadm dracut
-
-  echo -e "\e[1m\e[40m\e[93mINSTALL DRACUT HOOKS\e[0m"
-
-  install -Dm644 /archify-config/90-dracut-install.hook /usr/share/libalpm/hooks/90-dracut-install.hook
-  install -Dm644 /archify-config/60-dracut-remove.hook /usr/share/libalpm/hooks/60-dracut-remove.hook
-  install -Dm755 /archify-config/dracut-install /usr/share/libalpm/scripts/dracut-install
-  install -Dm755 /archify-config/dracut-remove /usr/share/libalpm/scripts/dracut-remove
+  apt install -y lvm2 mdadm dracut
   
-  echo -e "\e[1m\e[40m\e[93mINSTALL KERNEL AND RUN DRACUT HOOKS\e[0m"
-  pacman --noconfirm -Rns mkinitcpio
+  echo -e "\e[1m\e[40m\e[93mINSTALL KERNEL\e[0m"
 fi
 
-pacman --noconfirm -S linux linux-firmware
+apt install -y linux-image-amd64
 
 if [[ $GRAPHICS_DRIVER != "no" ]]; then
   echo -e "\e[1m\e[46m\e[97mINSTALLING GRAPHICS DRIVER\e[0m"
   if [[ "$GRAPHICS_DRIVER" == "amd" ]]; then
-    pacman --noconfirm -S libva-mesa-driver mesa vulkan-radeon xf86-video-amdgpu xf86-video-ati xorg-server xorg-xinit
+    apt install -y xserver-xorg-video-amdgpu mesa-vulkan-drivers libva-mesa-driver xserver-xorg
   elif [[ "$GRAPHICS_DRIVER" == "intel" ]]; then
-    pacman --noconfirm -S intel-media-driver libva-intel-driver mesa vulkan-intel xorg-server xorg-xinit
+    apt install -y xserver-xorg-video-intel mesa-vulkan-drivers intel-media-va-driver xserver-xorg
   elif [[ "$GRAPHICS_DRIVER" == "nouveau-nvidia" ]]; then
-    pacman --noconfirm -S libva-mesa-driver mesa vulkan-nouveau xf86-video-nouveau xorg-server xorg-xinit
+    apt install -y xserver-xorg-video-nouveau mesa-vulkan-drivers xserver-xorg
   elif [[ "$GRAPHICS_DRIVER" == "nvidia" ]]; then
-    pacman --noconfirm -S libva-nvidia-driver nvidia xorg-server xorg-xinit
+    apt install -y nvidia-driver xserver-xorg
   elif [[ "$GRAPHICS_DRIVER" == "nvidia-open" ]]; then
-    pacman --noconfirm -S libva-nvidia-driver nvidia-open xorg-server xorg-xinit
+    apt install -y nvidia-driver xserver-xorg
   elif [[ "$GRAPHICS_DRIVER" == "virt-machine" ]]; then
-    pacman --noconfirm -S mesa xf86-video-vmware xorg-server xorg-xinit
+    apt install -y xserver-xorg-video-vmware mesa-vulkan-drivers xserver-xorg
   else
-    pacman --noconfirm -S intel-media-driver libva-intel-driver libva-mesa-driver mesa vulkan-intel vulkan-nouveau vulkan-radeon xf86-video-amdgpu xf86-video-ati xf86-video-nouveau xf86-video-vmware xorg-server xorg-xinit
+    apt install -y xserver-xorg-video-amdgpu xserver-xorg-video-intel xserver-xorg-video-nouveau xserver-xorg-video-vmware mesa-vulkan-drivers xserver-xorg
   fi
 fi
 
 if [[ $SOUND_SERVER != "no" ]]; then
   echo -e "\e[1m\e[46m\e[97mINSTALLING SOUND SERVER\e[0m"
   if [[ "$SOUND_SERVER" == "pipewire" ]]; then
-    pacman --noconfirm -S pipewire
+    apt install -y pipewire
   elif [[ "$SOUND_SERVER" == "pulseaudio" ]]; then
-    pacman --noconfirm -S pulseaudio
+    apt install -y pulseaudio
   fi
 fi
 
@@ -98,124 +90,85 @@ if [[ $GRAPHIC != "no" ]]; then
     rm -rf "$d/.cache/*"
 
     rm -rf "$d/.local/share/themes"
+
     rm -rf "$d/.local/share/icons"
-
-    rm -rf "$d/.themes"
-    rm -rf "$d/.icons"
+    rm -rf "$d/.local/share/fonts"
+    rm -rf "$d/.local/share/mime"
+    rm -rf "$d/.local/share/applications"
+    rm -rf "$d/.local/share/desktop-directories"
+    rm -rf "$d/.local/share/pixmaps"
+    rm -rf "$d/.local/share/sounds"
+    rm -rf "$d/.local/share/gnome"
+    rm -rf "$d/.local/share/kde"
+    rm -rf "$d/.local/share/xfce4"
+    rm -rf "$d/.local/share/lxqt"
+    rm -rf "$d/.local/share/cinnamon"
+    rm -rf "$d/.local/share/mate"
   done
+fi
 
-  pacman --noconfirm -S htop iwd nano openssh smartmontools wget wireless_tools man-db man-pages
-
-  echo -e "\e[1m\e[46m\e[97mINSTALLING GRAPHICAL ENVIRONMENT\e[0m"
-  if [[ "$GRAPHIC" == "gnome" ]]; then
-    pacman --noconfirm -S gnome gnome-tweaks
-    systemctl enable gdm
-  elif [[ "$GRAPHIC" == "kde" ]]; then
-    pacman --noconfirm -S plasma plasma-meta plasma-workspace kio-admin spectacle gwenview kcalc sddm kde-applications
-    systemctl enable sddm
-  elif [[ "$GRAPHIC" == "xfce4" ]]; then
-    pacman --noconfirm -S xfce4 xfce4-goodies xarchiver pavucontrol gvfs lightdm lightdm-gtk-greeter
-    systemctl enable lightdm
-  elif [[ "$GRAPHIC" == "awesome" ]]; then
-    pacman --noconfirm -S alacritty awesome feh gnu-free-fonts slock terminus-font ttf-liberation xorg-server xorg-xinit xorg-xrandr xsel xterm gdm
-    systemctl enable gdm
-  elif [[ "$GRAPHIC" == "bspwm" ]]; then
-    pacman --noconfirm -S bspwm dmenu rxvt-unicode sxhkd xdo lightdm lightdm-gtk-greeter
-    systemctl enable lightdm
-  elif [[ "$GRAPHIC" == "budgie" ]]; then
-    pacman --noconfirm -S arc-gtk-theme budgie mate-terminal nemo papirus-icon-theme lightdm lightdm-gtk-greeter
-    systemctl enable lightdm
-  elif [[ "$GRAPHIC" == "cinnamon" ]]; then
-    pacman --noconfirm -S blueman bluez-utils cinnamon engrampa gnome-keyring gnome-screenshot gnome-terminal gvfs-smb system-config-printer xdg-user-dirs-gtk xed lightdm lightdm-gtk-greeter
-    systemctl enable lightdm
-  elif [[ "$GRAPHIC" == "cutefish" ]]; then
-    pacman --noconfirm -S cutefish noto-fonts sddm
-    systemctl enable sddm
-  elif [[ "$GRAPHIC" == "deepin" ]]; then
-    pacman --noconfirm -S deepin deepin-editor deepin-terminal lightdm lightdm-gtk-greeter
-    systemctl enable lightdm
-  elif [[ "$GRAPHIC" == "enlightenment" ]]; then
-    pacman --noconfirm -S englightenment terminology lightdm lightdm-gtk-greeter
-    systemctl enable lightdm
-  elif [[ "$GRAPHIC" == "hyprland" ]]; then
-    pacman --noconfirm -S dolphin dunst grim hyprland kitty polkit-kde-agent qt5-wayland qt6-wayland slurp wofi xdg-desktop-portal-hyprland xdg-utils sddm
-    systemctl enable sddm
-  elif [[ "$GRAPHIC" == "lxqt" ]]; then
-    pacman --noconfirm -S breeze-icons leafpad lxqt oxygen-icons slock ttf-freefont xdg-utils sddm
-    systemctl enable sddm
-  elif [[ "$GRAPHIC" == "mate" ]]; then
-    pacman --noconfirm -S mate mate-extra lightdm lightdm-gtk-greeter
-    systemctl enable lightdm
-  elif [[ "$GRAPHIC" == "qtile" ]]; then
-    pacman --noconfirm -S alacritty qtile lightdm lightdm-gtk-greeter
-    systemctl enable lightdm
-  elif [[ "$GRAPHIC" == "sway" ]]; then
-    pacman --noconfirm -S brightnessctl dmenu foot grim pavucontrol polkit slurp sway swaybg swayidle swaylock waybar xorg-xwayland xdg-utils lightdm lightdm-gtk-greeter
-    systemctl enable lightdm
-  elif [[ "$GRAPHIC" == "i3wm" ]]; then
-    pacman --noconfirm -S dmenu i3-wm i3blocks i3lock i3status lightdm lightdm-gtk-greeter xss-lock xterm
-    systemctl enable lightdm
-  elif [[ "$GRAPHIC" == "fluxbox" ]]; then
-    pacman --noconfirm -S fluxbox xterm xorg-server xorg-xinit
-  elif [[ "$GRAPHIC" == "xorg" ]]; then
-    pacman --noconfirm -S xorg-server xorg-xinit 
+if [[ $GRAPHIC != "no" ]]; then
+  if [ "$DISTRO" = "debian" ]; then
+    if [ "$GRAPHIC" = "gnome" ]; then
+      apt install -y gnome-session gdm3
+    elif [ "$GRAPHIC" = "kde" ]; then
+      apt install -y kde-standard sddm
+    elif [ "$GRAPHIC" = "xfce" ]; then
+      apt install -y xfce4 xfce4-goodies lightdm
+    elif [ "$GRAPHIC" = "lxqt" ]; then
+      apt install -y lxqt sddm
+    elif [ "$GRAPHIC" = "cinnamon" ]; then
+      apt install -y cinnamon-desktop-environment lightdm
+    elif [ "$GRAPHIC" = "mate" ]; then
+      apt install -y mate-desktop-environment lightdm
+    fi
+  elif [ "$DISTRO" = "ubuntu" ]; then
+    if [ "$GRAPHIC" = "gnome" ]; then
+      apt install -y ubuntu-desktop
+    elif [ "$GRAPHIC" = "kde" ]; then
+      apt install -y kubuntu-desktop
+    elif [ "$GRAPHIC" = "xfce" ]; then
+      apt install -y xubuntu-desktop
+    elif [ "$GRAPHIC" = "lxqt" ]; then
+      apt install -y lubuntu-desktop
+    elif [ "$GRAPHIC" = "mate" ]; then
+      apt install -y ubuntu-mate-desktop
+    elif [ "$GRAPHIC" = "cinnamon" ]; then
+      apt install -y ubuntu-cinnamon-desktop
+    fi
+  elif [ "$DISTRO" = "kali" ]; then
+    apt install -y kali-desktop-gnome
+  elif [ "$DISTRO" = "linuxmint" ]; then
+    if [ "$GRAPHIC" = "cinnamon" ]; then
+      apt install -y mint-meta-cinnamon
+    elif [ "$GRAPHIC" = "mate" ]; then
+      apt install -y mint-meta-mate
+    elif [ "$GRAPHIC" = "xfce" ]; then
+      apt install -y mint-meta-xfce
+    fi
   fi
 fi
 
-if [ "$NETWORKMANAGER" -eq 1  ]; then
-  echo -e "\e[1m\e[46m\e[97mINSTALLING NETWORKMANAGER\e[0m"
-  pacman --noconfirm -S networkmanager
-  systemctl enable NetworkManager
+if [ "$NETWORKMANAGER" -eq 1 ]; then
+  apt install -y network-manager
 fi
 
-CPU_VENDOR=$( sed -n '/vendor_id/{s/^[^:]*: *//;p;q}' /proc/cpuinfo )
+apt install -y grub-pc neofetch sudo vim bash-completion efibootmgr xfsprogs btrfs-progs
 
-if [[ "$CPU_VENDOR" == "GenuineIntel" ]]; then
-  pacman --noconfirm -S intel-ucode
-elif [[ "$CPU_VENDOR" == "AuthenticAMD" ]]; then
-  pacman --noconfirm -S amd-ucode
+if [ "$NETWORKMANAGER" -eq 0 ]; then
+  apt install -y dhcpcd wpasupplicant
 fi
 
-echo "GRUB_DISABLE_OS_PROBER=false" >> /etc/default/grub
-echo "GRUB_ENABLE_CRYPTODISK=y" >> /etc/default/grub
+echo -e "\e[1m\e[46m\e[97mINSTALLATION COMPLETED\e[0m"
 
-if [ -d /sys/firmware/efi ]; then
-  echo -e "\e[1m\e[46m\e[97mINSTALLING GRUB (UEFI)\e[0m"
-  env -i grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=ARCHGRUB || env -i grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=ARCHGRUB
+if [ "$FORCE_REBOOT_AFTER_INSTALLATION" -eq 1 ]; then
+  echo -e "\e[1m\e[46m\e[97mREBOOTING IN 10 SECONDS\e[0m"
+  for i in 10 9 8 7 6 5 4 3 2 1; do
+    printf "%s..." "$i"
+    sleep 1
+  done
+  printf "\n"
+  reboot
 else
-  dev=$(findmnt -n -o SOURCE /boot | sed 's/ .*//;s/\/dev\///;s/\[.*//') 
-  if [ -z "$dev" ]; then
-    dev=$(findmnt -n -o SOURCE / | sed 's/ .*//;s/\/dev\///;s/\[.*//') 
-  fi
-  target=$(basename "$(readlink -f "/sys/class/block/$dev/..")")
-
-  if [ -z "$target" ]; then
-    echo -e "\e[1m\e[40m\e[93mCANNOT FIND DEVICE ON / FOR SOME REASON\e[0m"
-    lsblk
-    read -p "Enter drive for GRUB installation (e.g. sda or nvme0n1): " -r target
-
-  fi
-
-
-  echo -e "\e[1m\e[46m\e[97mINSTALLING GRUB (BIOS) ON $target\e[0m" 
-  env -i grub-install --target=i386-pc "/dev/$target"
-  cp -r /usr/lib/grub/i386-pc /boot/grub
+  echo -e "\e[1m\e[46m\e[97mINSTALLATION COMPLETED. PLEASE REBOOT MANUALLY.\e[0m"
 fi
-
-echo -e "\e[1m\e[46m\e[97mCREATING GRUB CONFIG\e[0m"
-env -i grub-mkconfig -o /boot/grub/grub.cfg
-
-sync
-
-if [[ "$FORCE_REBOOT_AFTER_INSTALLATION" != "1" ]]; then
-  echo -e "\e[1m\e[46m\e[97mSTARTING BASH TO PERFORM MANUAL POST-INSTALL CONFIGURATION\e[0m"
-  echo -e "EXIT TO REBOOT"
-  bash
-fi
-
-echo -e "\e[1m\e[46m\e[97mREBOOTING SYSTEM NOW\e[0m"
-sleep 2
-
-sync
-echo 1 > /proc/sys/kernel/sysrq
-echo b > /proc/sysrq-trigger
