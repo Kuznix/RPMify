@@ -3,7 +3,7 @@
 help:
 	@echo "Available targets:"
 	@echo "  clean    - Remove generated delta files"
-	@echo "  install  - Run the Debianify installation script (requires sudo)"
+	@echo "  install  - Run the RPMify installation script (requires sudo)"
 	@echo "  help     - Show this help message"
 
 clean:
